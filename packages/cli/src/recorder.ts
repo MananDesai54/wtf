@@ -27,8 +27,9 @@ export class Recorder {
   private context!: BrowserContext;
   private _page!: Page;
   private currentNodeId: string | null = null;
-  private lastCaptured: { id: string; url: string } | null = null;
+  private lastCaptured: { id: string; url: string; at: number } | null = null;
   private pendingEdge: { from: string; click: ClickEvent } | null = null;
+  private lastClick: ClickEvent | null = null;
   private shotSeq = 0;
   private stopped = false;
 
@@ -82,10 +83,6 @@ export class Recorder {
     if (this.currentNodeId) this.graph.setNote(this.currentNodeId, text);
   }
 
-  markNextDistinct(): void {
-    this.graph.markNextDistinct();
-  }
-
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
@@ -101,6 +98,9 @@ export class Recorder {
 
   // Snapshot a page into the graph. Called from the injected control
   // panel's Capture button in whichever tab it was clicked (or in tests).
+  // Every capture is its own node — the same URL captured twice is two
+  // states (modal open/closed, dropdown, form step), so URL dedup is
+  // bypassed.
   async capture(page: Page = this._page): Promise<void> {
     if (this.stopped || !page) return;
     const timestamp = Date.now();
@@ -113,28 +113,40 @@ export class Recorder {
       return; // page/context gone
     }
 
-    const { node, isNew } = this.graph.ensureNode(url, title, this.opts.viewport, timestamp);
+    this.graph.markNextDistinct();
+    const { node } = this.graph.ensureNode(url, title, this.opts.viewport, timestamp);
 
-    if (this.pendingEdge && this.pendingEdge.from !== node.id) {
-      const { from, click } = this.pendingEdge;
-      this.graph.addEdge(from, node.id, click.label, click.bbox, timestamp);
+    // Edge preference: the click that navigated away from the last captured
+    // page; otherwise the last click ON the last captured page (state change
+    // without navigation — modal, tab, dropdown).
+    let edge = this.pendingEdge;
+    if (
+      !edge &&
+      this.lastCaptured &&
+      this.lastClick &&
+      this.lastClick.timestamp >= this.lastCaptured.at &&
+      normalizeUrl(this.lastClick.pageUrl) === this.lastCaptured.url
+    ) {
+      edge = { from: this.lastCaptured.id, click: this.lastClick };
+    }
+    if (edge && edge.from !== node.id) {
+      this.graph.addEdge(edge.from, node.id, edge.click.label, edge.click.bbox, timestamp);
     }
     this.pendingEdge = null;
+    this.lastClick = null;
 
-    if (isNew) {
-      const shotFile = `shots/${String(++this.shotSeq).padStart(4, '0')}.png`;
-      try {
-        await this.setPanelVisible(page, false);
-        await page.screenshot({ path: join(this.opts.out, shotFile), fullPage: true });
-        this.graph.setShot(node.id, shotFile);
-      } catch (err) {
-        console.warn(`wtf: screenshot failed for ${node.url}: ${String(err)}`);
-      } finally {
-        await this.setPanelVisible(page, true);
-      }
+    const shotFile = `shots/${String(++this.shotSeq).padStart(4, '0')}.png`;
+    try {
+      await this.setPanelVisible(page, false);
+      await page.screenshot({ path: join(this.opts.out, shotFile), fullPage: true });
+      this.graph.setShot(node.id, shotFile);
+    } catch (err) {
+      console.warn(`wtf: screenshot failed for ${node.url}: ${String(err)}`);
+    } finally {
+      await this.setPanelVisible(page, true);
     }
 
-    this.lastCaptured = { id: node.id, url: node.url };
+    this.lastCaptured = { id: node.id, url: node.url, at: timestamp };
     this.currentNodeId = node.id;
     await this.updatePanel(page);
   }
@@ -168,6 +180,7 @@ export class Recorder {
     if (e.type === 'click') {
       const { type, ...click } = e;
       this.tracker.recordClick(click);
+      this.lastClick = click;
     } else if (e.type === 'spa-nav') {
       this.onNavigation(e.url, e.timestamp);
     } else if (e.type === 'capture') {

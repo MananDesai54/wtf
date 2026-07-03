@@ -107,6 +107,63 @@ describe('Recorder', () => {
     }
   }, 60_000);
 
+  it('captures multiple states of the same URL, connected by the state-changing click', async () => {
+    const out4 = mkdtempSync(join(tmpdir(), 'wtf-it4-'));
+    const rec = new Recorder({
+      url: baseUrl,
+      out: out4,
+      viewport: { width: 800, height: 600 },
+      headless: true,
+    });
+    await rec.start();
+    const page = rec.page;
+
+    await page.waitForSelector('#__wtf_capture_btn');
+    await page.click('#__wtf_capture_btn');       // capture base state -> p1
+    await page.waitForTimeout(500);
+
+    await page.click('#modal');                    // DOM change, URL unchanged
+    await page.waitForTimeout(200);
+    await page.click('#__wtf_capture_btn');        // capture modal state -> p2 (same URL)
+    await page.waitForTimeout(500);
+
+    await rec.stop();
+
+    const graph: GraphData = JSON.parse(readFileSync(join(out4, 'graph.json'), 'utf8'));
+    expect(graph.nodes).toHaveLength(2);
+    expect(graph.nodes.map((n) => new URL(n.url).pathname)).toEqual(['/', '/']);
+    expect(graph.nodes[0].shotFile).not.toBe(graph.nodes[1].shotFile);
+
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.edges[0]).toMatchObject({ from: 'p1', to: 'p2', label: 'Open Modal' });
+
+    await rec.stop();
+  }, 60_000);
+
+  it('does not create an edge between captures with no click in between', async () => {
+    const out5 = mkdtempSync(join(tmpdir(), 'wtf-it5-'));
+    const rec = new Recorder({
+      url: baseUrl,
+      out: out5,
+      viewport: { width: 800, height: 600 },
+      headless: true,
+    });
+    await rec.start();
+    const page = rec.page;
+
+    await page.waitForSelector('#__wtf_capture_btn');
+    await page.click('#__wtf_capture_btn');       // p1
+    await page.waitForTimeout(500);
+    await page.click('#__wtf_capture_btn');       // p2 — no page click between
+    await page.waitForTimeout(500);
+
+    await rec.stop();
+
+    const graph: GraphData = JSON.parse(readFileSync(join(out5, 'graph.json'), 'utf8'));
+    expect(graph.nodes).toHaveLength(2);          // every Capture = its own snapshot
+    expect(graph.edges).toHaveLength(0);
+  }, 60_000);
+
   it('does not record panel clicks as page clicks and restores panel after screenshot', async () => {
     const out2 = mkdtempSync(join(tmpdir(), 'wtf-it2-'));
     const rec = new Recorder({

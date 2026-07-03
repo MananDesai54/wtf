@@ -42,14 +42,14 @@ program
     console.log(`Session dir: ${out}`);
     console.log('Browse to a page, then click "Capture" in the panel (top-right of the page) to snapshot it.');
     console.log('Only captured pages end up in Figma. Click "Done" there (or type it here) to finish.');
+    console.log('Every Capture click is its own snapshot — capture the same page again after opening a modal, tab, etc.');
     console.log('Type a note + Enter to annotate the last captured page.');
-    console.log("Commands: 'done' = finish, 'new' = capture next as a distinct page even if URL was seen.\n");
+    console.log("Command: 'done' = finish.\n");
 
     rl.on('line', (line) => {
       const text = line.trim();
       if (!text) return;
       if (text === 'done') { void finish(); return; }
-      if (text === 'new') { rec.markNextDistinct(); console.log('next page state will be a distinct node'); return; }
       rec.note(text);
       console.log('note attached to current page');
     });
