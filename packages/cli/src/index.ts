@@ -58,8 +58,9 @@ program
   .argument('<sessionDir>', 'session directory from flowrec record')
   .option('--out <file>', 'output bundle', 'figma-import.json')
   .action(async (sessionDir: string, opts: { out: string }) => {
-    await exportSession(resolve(sessionDir), resolve(opts.out));
-    console.log(`Wrote ${opts.out} — import it with the flowrec Figma plugin.`);
+    const outFile = resolve(opts.out);
+    await exportSession(resolve(sessionDir), outFile);
+    console.log(`Wrote ${outFile} — import it with the flowrec Figma plugin.`);
   });
 
 program.parseAsync().catch((err) => {

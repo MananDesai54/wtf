@@ -21,7 +21,7 @@ export async function exportSession(sessionDir: string, outFile: string): Promis
   try {
     graph = JSON.parse(readFileSync(join(sessionDir, 'graph.json'), 'utf8'));
   } catch (err) {
-    throw new Error(`cannot read session graph at ${join(sessionDir, 'graph.json')}: ${String(err)}`);
+    throw new Error(`cannot read session graph at ${join(sessionDir, 'graph.json')}: ${String(err)}`, { cause: err });
   }
   const factors = new Map<string, number>();
   const nodes = [];
@@ -47,7 +47,7 @@ export async function exportSession(sessionDir: string, outFile: string): Promis
           height: scaled.height ?? Math.round(h * f),
         };
       } catch (err) {
-        throw new Error(`failed to process screenshot for node ${n.id} (${n.shotFile}): ${String(err)}`);
+        throw new Error(`failed to process screenshot for node ${n.id} (${n.shotFile}): ${String(err)}`, { cause: err });
       }
     }
     nodes.push({

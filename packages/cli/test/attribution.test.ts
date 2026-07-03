@@ -37,4 +37,10 @@ describe('ClickTracker', () => {
     t.recordClick({ ...click(2000), label: 'Later' });
     expect(t.consumeForNavigation(2500)?.label).toBe('Later');
   });
+
+  it('attributes a click at exactly the 5s boundary', () => {
+    const t = new ClickTracker();
+    t.recordClick(click(1000));
+    expect(t.consumeForNavigation(6000)?.label).toBe('Go');
+  });
 });

@@ -35,4 +35,14 @@ describe('validateBundle', () => {
     expect(r.bundle?.edges).toHaveLength(1);
     expect(r.warnings[0]).toMatch(/p99/);
   });
+  it('rejects bundles containing malformed nodes', () => {
+    const r = validateBundle({ ...good, nodes: [...good.nodes, { id: 'p3' }] });
+    expect(r.bundle).toBeNull();
+    expect(r.errors[0]).toMatch(/malformed/);
+  });
+  it('drops malformed edges with warning', () => {
+    const r = validateBundle({ ...good, edges: [...good.edges, { from: 'p1', to: 'p2' }] });
+    expect(r.bundle?.edges).toHaveLength(1);
+    expect(r.warnings[0]).toMatch(/malformed/);
+  });
 });
