@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { SessionGraph, type Viewport } from './graph.js';
 import { ClickTracker, type ClickEvent } from './attribution.js';
 import { CAPTURE_SCRIPT } from './capture-script.js';
+import { normalizeUrl } from './urls.js';
 
 export interface RecordOptions {
   url: string;
@@ -13,11 +14,12 @@ export interface RecordOptions {
   headless?: boolean;
 }
 
-const SETTLE_MS = 500;
-
 type CaptureEvent =
   | ({ type: 'click' } & ClickEvent)
-  | { type: 'spa-nav'; url: string; timestamp: number };
+  | { type: 'spa-nav'; url: string; timestamp: number }
+  | { type: 'capture'; timestamp: number }
+  | { type: 'done'; timestamp: number }
+  | { type: 'panel-ready'; timestamp: number };
 
 export class Recorder {
   private graph!: SessionGraph;
@@ -25,12 +27,14 @@ export class Recorder {
   private context!: BrowserContext;
   private _page!: Page;
   private currentNodeId: string | null = null;
+  private currentUrl: string | null = null;
+  private lastCaptured: { id: string; url: string } | null = null;
+  private pendingEdge: { from: string; click: ClickEvent } | null = null;
   private shotSeq = 0;
-  private settleTimer: ReturnType<typeof setTimeout> | null = null;
-  private pending: { url: string; timestamp: number } | null = null;
   private stopped = false;
 
   onClose: (() => void) | null = null;
+  onDoneRequest: (() => void) | null = null;
 
   constructor(private opts: RecordOptions) {}
 
@@ -85,9 +89,68 @@ export class Recorder {
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
-    if (this.settleTimer) clearTimeout(this.settleTimer);
     this.graph.save();
     await this.context.close().catch(() => {});
+  }
+
+  // Snapshot the current page into the graph. Called from the injected
+  // control panel's Capture button (or directly in tests).
+  async capture(): Promise<void> {
+    if (this.stopped) return;
+    const timestamp = Date.now();
+    const url = this._page.url();
+
+    let title = '';
+    try {
+      title = await this._page.title();
+    } catch {
+      return; // page/context gone
+    }
+
+    const { node, isNew } = this.graph.ensureNode(url, title, this.opts.viewport, timestamp);
+
+    if (this.pendingEdge && this.pendingEdge.from !== node.id) {
+      const { from, click } = this.pendingEdge;
+      this.graph.addEdge(from, node.id, click.label, click.bbox, timestamp);
+    }
+    this.pendingEdge = null;
+
+    if (isNew) {
+      const shotFile = `shots/${String(++this.shotSeq).padStart(4, '0')}.png`;
+      try {
+        await this.setPanelVisible(false);
+        await this._page.screenshot({ path: join(this.opts.out, shotFile), fullPage: true });
+        this.graph.setShot(node.id, shotFile);
+      } catch (err) {
+        console.warn(`wtf: screenshot failed for ${node.url}: ${String(err)}`);
+      } finally {
+        await this.setPanelVisible(true);
+      }
+    }
+
+    this.lastCaptured = { id: node.id, url: node.url };
+    this.currentNodeId = node.id;
+    await this.updatePanel();
+  }
+
+  private async setPanelVisible(visible: boolean): Promise<void> {
+    if (!this._page) return;
+    await this._page
+      .evaluate((v) => {
+        const p = document.getElementById('__wtf_panel');
+        if (p) p.style.display = v ? 'flex' : 'none';
+      }, visible)
+      .catch(() => {});
+  }
+
+  private async updatePanel(): Promise<void> {
+    if (!this._page) return;
+    const count = this.graph.data.nodes.length;
+    await this._page
+      .evaluate((c) => {
+        (window as unknown as { __wtfPanelState?: (n: number) => void }).__wtfPanelState?.(c);
+      }, count)
+      .catch(() => {});
   }
 
   private logEvent(e: unknown): void {
@@ -101,47 +164,30 @@ export class Recorder {
       this.tracker.recordClick(click);
     } else if (e.type === 'spa-nav') {
       this.onNavigation(e.url, e.timestamp);
+    } else if (e.type === 'capture') {
+      void this.capture();
+    } else if (e.type === 'done') {
+      this.onDoneRequest?.();
+    } else if (e.type === 'panel-ready') {
+      void this.updatePanel();
     }
   }
 
+  // Navigations no longer create nodes — they only track where the user is
+  // and remember the click that led away from the last captured page, so the
+  // next explicit capture can draw the edge.
   private onNavigation(url: string, timestamp: number): void {
     if (this.stopped || url === 'about:blank') return;
     this.logEvent({ type: 'nav', url, timestamp });
-    this.pending = { url, timestamp };
-    if (this.settleTimer) clearTimeout(this.settleTimer);
-    this.settleTimer = setTimeout(() => {
-      void this.commitPageState();
-    }, SETTLE_MS);
-  }
-
-  private async commitPageState(): Promise<void> {
-    const pending = this.pending;
-    if (!pending || this.stopped) return;
-    this.pending = null;
-
-    let title = '';
-    try {
-      title = await this._page.title();
-    } catch {
-      return; // page/context gone
+    if (
+      this.lastCaptured &&
+      !this.pendingEdge &&
+      this.currentUrl &&
+      normalizeUrl(this.currentUrl) === this.lastCaptured.url
+    ) {
+      const click = this.tracker.consumeForNavigation(timestamp);
+      if (click) this.pendingEdge = { from: this.lastCaptured.id, click };
     }
-
-    const { node, isNew } = this.graph.ensureNode(pending.url, title, this.opts.viewport, pending.timestamp);
-
-    if (this.currentNodeId && node.id !== this.currentNodeId) {
-      const click = this.tracker.consumeForNavigation(pending.timestamp);
-      if (click) this.graph.addEdge(this.currentNodeId, node.id, click.label, click.bbox, pending.timestamp);
-    }
-    this.currentNodeId = node.id;
-
-    if (isNew) {
-      const shotFile = `shots/${String(++this.shotSeq).padStart(4, '0')}.png`;
-      try {
-        await this._page.screenshot({ path: join(this.opts.out, shotFile), fullPage: true });
-        this.graph.setShot(node.id, shotFile);
-      } catch (err) {
-        console.warn(`wtf: screenshot failed for ${node.url}: ${String(err)}`);
-      }
-    }
+    this.currentUrl = url;
   }
 }

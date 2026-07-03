@@ -35,12 +35,15 @@ program
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     rec.onClose = () => { void finish(); };
+    rec.onDoneRequest = () => { void finish(); };
 
     await rec.start();
     console.log(`Recording ${opts.url}`);
     console.log(`Session dir: ${out}`);
-    console.log('Type a note + Enter to annotate the current page.');
-    console.log("Commands: 'done' = finish, 'new' = treat next visit of a seen URL as a new page.\n");
+    console.log('Browse to a page, then click "Capture" in the panel (top-right of the page) to snapshot it.');
+    console.log('Only captured pages end up in Figma. Click "Done" there (or type it here) to finish.');
+    console.log('Type a note + Enter to annotate the last captured page.');
+    console.log("Commands: 'done' = finish, 'new' = capture next as a distinct page even if URL was seen.\n");
 
     rl.on('line', (line) => {
       const text = line.trim();

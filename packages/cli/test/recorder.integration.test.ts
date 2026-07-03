@@ -19,7 +19,7 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 describe('Recorder', () => {
-  it('records full-load and SPA navigations with click edges and screenshots', async () => {
+  it('captures pages only on explicit Capture clicks, with click edges between captured pages', async () => {
     const rec = new Recorder({
       url: baseUrl,
       out,
@@ -29,18 +29,28 @@ describe('Recorder', () => {
     await rec.start();
     const page = rec.page;
 
-    await page.waitForTimeout(800); // settle debounce for the entry page
+    await page.waitForSelector('#__wtf_panel'); // control panel injected
+    await page.click('#__wtf_capture_btn');     // capture entry page -> p1
+    await page.waitForTimeout(500);
     rec.note('entry page');
 
-    await page.click('#go');       // full page load -> /two.html
-    await page.waitForTimeout(800);
+    await page.click('#go');                    // full page load -> /two.html
+    await page.waitForSelector('#__wtf_capture_btn');
+    await page.click('#__wtf_capture_btn');     // capture -> p2, edge p1->p2
+    await page.waitForTimeout(500);
 
-    await page.click('#spa');      // SPA pushState -> /three
-    await page.waitForTimeout(800);
+    await page.click('#spa');                   // SPA pushState -> /three
+    await page.waitForTimeout(300);
+    await page.click('#__wtf_capture_btn');     // capture -> p3, edge p2->p3
+    await page.waitForTimeout(500);
+
+    await page.click('#spa2');                  // SPA pushState -> /four, NOT captured
+    await page.waitForTimeout(300);
 
     await rec.stop();
 
     const graph: GraphData = JSON.parse(readFileSync(join(out, 'graph.json'), 'utf8'));
+    // only explicitly captured pages become nodes — /four never captured
     expect(graph.nodes).toHaveLength(3);
     expect(graph.nodes.map((n) => new URL(n.url).pathname)).toEqual(['/', '/two.html', '/three']);
     expect(graph.nodes[0].note).toBe('entry page');
@@ -59,5 +69,32 @@ describe('Recorder', () => {
     }
 
     expect(existsSync(join(out, 'events.jsonl'))).toBe(true);
+  }, 60_000);
+
+  it('does not record panel clicks as page clicks and restores panel after screenshot', async () => {
+    const out2 = mkdtempSync(join(tmpdir(), 'wtf-it2-'));
+    const rec = new Recorder({
+      url: baseUrl,
+      out: out2,
+      viewport: { width: 800, height: 600 },
+      headless: true,
+    });
+    await rec.start();
+    const page = rec.page;
+
+    await page.waitForSelector('#__wtf_panel');
+    await page.click('#__wtf_capture_btn');
+    await page.waitForTimeout(500);
+
+    // panel visible again after the screenshot hid it
+    const display = await page.$eval('#__wtf_panel', (el) => (el as HTMLElement).style.display);
+    expect(display).not.toBe('none');
+
+    // capture-button click must not be logged as a page click event
+    const events = readFileSync(join(out2, 'events.jsonl'), 'utf8')
+      .trim().split('\n').map((l) => JSON.parse(l));
+    expect(events.filter((e) => e.type === 'click')).toHaveLength(0);
+
+    await rec.stop();
   }, 60_000);
 });

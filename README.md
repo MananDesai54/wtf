@@ -18,12 +18,23 @@ npm run build --workspaces
 node packages/cli/dist/index.js record --url https://your-app.com
 ```
 
-A Chromium window opens — browse normally. In the terminal:
+A Chromium window opens — browse normally. Capturing is **manual**: a small
+control panel sits in the top-right of every page.
 
-- type text + Enter → attach a note to the current page
-- `new` → treat the next visit of an already-seen URL as a separate page
+- **Capture** → snapshot the current page (screenshot + node). Only captured
+  pages end up in Figma. The panel itself never appears in screenshots.
+- **Done** → finish the session (same as typing `done` in the terminal)
+- The click that took you away from one captured page to the next becomes
+  the arrow between them — pages you pass through without capturing are
+  skipped.
+
+In the terminal:
+
+- type text + Enter → attach a note to the last captured page
+- `new` → capture the next page as separate even if its URL was seen before
 - `done` (or Ctrl+C) → finish the session
-- `--profile ~/.wtf-profile` → keep logins between sessions
+
+Launch flag: `--profile ~/.wtf-profile` → keep logins between sessions.
 
 ## Export
 

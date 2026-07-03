@@ -6,7 +6,9 @@ const INDEX = `<!doctype html><title>Home</title>
 
 const TWO = `<!doctype html><title>Two</title>
 <button id="spa" style="display:block;width:140px;height:40px"
-  onclick="history.pushState({}, '', '/three')">Open Three</button>`;
+  onclick="history.pushState({}, '', '/three')">Open Three</button>
+<button id="spa2" style="display:block;width:140px;height:40px"
+  onclick="history.pushState({}, '', '/four')">Open Four</button>`;
 
 export function startFixture(): Promise<{ url: string; server: Server }> {
   const server = createServer((req, res) => {
