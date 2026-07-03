@@ -1,5 +1,5 @@
 {
-  "name": "flowrec-monorepo",
+  "name": "wtf-monorepo",
   "private": true,
   "type": "module",
   "workspaces": ["packages/*"],

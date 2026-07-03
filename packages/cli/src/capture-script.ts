@@ -1,11 +1,11 @@
 // Runs inside the recorded page. Kept as a plain string so Playwright
 // injects it verbatim on every navigation.
 export const CAPTURE_SCRIPT = `(() => {
-  if (window.__flowrecInstalled) return;
-  window.__flowrecInstalled = true;
+  if (window.__wtfInstalled) return;
+  window.__wtfInstalled = true;
 
   const send = (payload) => {
-    try { window.__flowrec(JSON.stringify(payload)); } catch (e) {}
+    try { window.__wtf(JSON.stringify(payload)); } catch (e) {}
   };
 
   const cssPath = (el) => {

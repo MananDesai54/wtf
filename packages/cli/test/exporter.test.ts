@@ -23,7 +23,7 @@ describe('scaleBBox', () => {
 
 describe('exportSession', () => {
   it('bundles nodes with base64 images, downscaling oversized shots', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'flowrec-exp-'));
+    const dir = mkdtempSync(join(tmpdir(), 'wtf-exp-'));
     mkdirSync(join(dir, 'shots'));
     // 1000x100 (fits) and 8192x64 (needs 0.5x)
     await sharp({ create: { width: 1000, height: 100, channels: 3, background: 'red' } })
@@ -59,7 +59,7 @@ describe('exportSession', () => {
   });
 
   it('emits image:null for nodes without a screenshot and leaves their edges unscaled', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'flowrec-exp2-'));
+    const dir = mkdtempSync(join(tmpdir(), 'wtf-exp2-'));
     mkdirSync(join(dir, 'shots'));
     const graph: GraphData = {
       startUrl: 'https://a.com/',
@@ -81,7 +81,7 @@ describe('exportSession', () => {
   });
 
   it('fails with node context when a screenshot file is missing', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'flowrec-exp3-'));
+    const dir = mkdtempSync(join(tmpdir(), 'wtf-exp3-'));
     mkdirSync(join(dir, 'shots'));
     const graph: GraphData = {
       startUrl: 'https://a.com/',

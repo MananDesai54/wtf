@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { Recorder } from './recorder.js';
 import { exportSession } from './exporter.js';
 
-const program = new Command().name('flowrec').description('Record web flows, export to Figma');
+const program = new Command().name('wtf').description('Record web flows, export to Figma');
 
 program
   .command('record')
@@ -16,7 +16,7 @@ program
   .action(async (opts: { url: string; out?: string; profile?: string; viewport: string }) => {
     const m = /^(\d+)x(\d+)$/.exec(opts.viewport);
     if (!m) { console.error('invalid --viewport, expected WxH e.g. 1440x900'); process.exit(1); }
-    const out = resolve(opts.out ?? `flowrec-session-${Date.now()}`);
+    const out = resolve(opts.out ?? `wtf-session-${Date.now()}`);
 
     const rec = new Recorder({
       url: opts.url,
@@ -29,7 +29,7 @@ program
       await rec.stop();
       rl.close();
       console.log(`\nSession saved to ${out}`);
-      console.log(`Next: flowrec export ${out}`);
+      console.log(`Next: wtf export ${out}`);
       process.exit(0);
     };
 
@@ -55,12 +55,12 @@ program
 
 program
   .command('export')
-  .argument('<sessionDir>', 'session directory from flowrec record')
+  .argument('<sessionDir>', 'session directory from wtf record')
   .option('--out <file>', 'output bundle', 'figma-import.json')
   .action(async (sessionDir: string, opts: { out: string }) => {
     const outFile = resolve(opts.out);
     await exportSession(resolve(sessionDir), outFile);
-    console.log(`Wrote ${outFile} — import it with the flowrec Figma plugin.`);
+    console.log(`Wrote ${outFile} — import it with the wtf Figma plugin.`);
   });
 
 program.parseAsync().catch((err) => {

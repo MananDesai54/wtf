@@ -9,7 +9,7 @@ let dir: string;
 let g: SessionGraph;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'flowrec-'));
+  dir = mkdtempSync(join(tmpdir(), 'wtf-'));
   g = new SessionGraph(dir, 'https://a.com/', '2026-07-03T00:00:00Z');
 });
 

@@ -1,8 +1,8 @@
 {
-  "name": "@flowrec/cli",
+  "name": "@wtf/cli",
   "version": "0.1.0",
   "type": "module",
-  "bin": { "flowrec": "dist/index.js" },
+  "bin": { "wtf": "dist/index.js" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run"

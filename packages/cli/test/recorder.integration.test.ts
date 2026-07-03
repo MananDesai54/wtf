@@ -13,7 +13,7 @@ let out: string;
 
 beforeAll(async () => {
   ({ url: baseUrl, server } = await startFixture());
-  out = mkdtempSync(join(tmpdir(), 'flowrec-it-'));
+  out = mkdtempSync(join(tmpdir(), 'wtf-it-'));
 });
 
 afterAll(() => server.close());

@@ -1,26 +1,26 @@
-# flowrec — Record web app flows, import into Figma
+# wtf — Record web app flows, import into Figma
 
 **Date:** 2026-07-03
 **Status:** Approved
 
 ## Problem
 
-Documenting a web app's user flows in Figma is manual: screenshot every page, place frames, draw arrows, remember what was clicked where. flowrec automates it: browse the app once while a recorder watches, then import the whole session into Figma as connected frames — arrows starting at the exact click locations.
+Documenting a web app's user flows in Figma is manual: screenshot every page, place frames, draw arrows, remember what was clicked where. wtf automates it: browse the app once while a recorder watches, then import the whole session into Figma as connected frames — arrows starting at the exact click locations.
 
 ## Overview
 
 Two components:
 
-1. **CLI recorder (`flowrec`)** — Node.js + TypeScript. Launches a headed Chromium via Playwright; the user browses normally. Captures clicks, navigations, per-page screenshots, and optional user-typed context notes. Produces a session directory, then exports a single self-contained JSON bundle.
-2. **Figma plugin (`flowrec-importer`)** — local development plugin. UI accepts the exported JSON file; plugin code builds frames (screenshot fills), click hotspots, arrows, prototype reactions, and note annotations.
+1. **CLI recorder (`wtf`)** — Node.js + TypeScript. Launches a headed Chromium via Playwright; the user browses normally. Captures clicks, navigations, per-page screenshots, and optional user-typed context notes. Produces a session directory, then exports a single self-contained JSON bundle.
+2. **Figma plugin (`wtf-importer`)** — local development plugin. UI accepts the exported JSON file; plugin code builds frames (screenshot fills), click hotspots, arrows, prototype reactions, and note annotations.
 
 The Figma REST API cannot create canvas content, so the plugin is required. It is run via Figma's "Import plugin from manifest" — no publishing needed.
 
 ## CLI
 
 ```
-flowrec record --url <start-url> [--out <dir>] [--profile <dir>] [--viewport 1440x900]
-flowrec export <session-dir> [--out figma-import.json]
+wtf record --url <start-url> [--out <dir>] [--profile <dir>] [--viewport 1440x900]
+wtf export <session-dir> [--out figma-import.json]
 ```
 
 ### `record`

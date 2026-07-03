@@ -1,4 +1,4 @@
-# flowrec
+# wtf
 
 Record a browsing session on any web app, then import it into Figma as
 connected frames — arrows start at the exact elements you clicked, and
@@ -23,7 +23,7 @@ A Chromium window opens — browse normally. In the terminal:
 - type text + Enter → attach a note to the current page
 - `new` → treat the next visit of an already-seen URL as a separate page
 - `done` (or Ctrl+C) → finish the session
-- `--profile ~/.flowrec-profile` → keep logins between sessions
+- `--profile ~/.wtf-profile` → keep logins between sessions
 
 ## Export
 
@@ -35,7 +35,7 @@ node packages/cli/dist/index.js export <session-dir> --out figma-import.json
 
 1. Figma desktop → Plugins → Development → **Import plugin from manifest…**
 2. Select `packages/figma-plugin/manifest.json`
-3. Run **flowrec importer**, pick your `figma-import.json`
+3. Run **wtf importer**, pick your `figma-import.json`
 
 You get one frame per page (screenshot fill), a highlighted hotspot where
 you clicked, arrows between pages, notes, and working prototype wiring.

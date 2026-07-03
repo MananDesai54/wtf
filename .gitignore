@@ -1,5 +1,5 @@
 node_modules/
 dist/
 *.tsbuildinfo
-flowrec-session-*/
+wtf-session-*/
 figma-import.json

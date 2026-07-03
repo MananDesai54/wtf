@@ -52,7 +52,7 @@ export class Recorder {
       this.context = await browser.newContext({ viewport: opts.viewport });
     }
 
-    await this.context.exposeBinding('__flowrec', (_source, json: string) => {
+    await this.context.exposeBinding('__wtf', (_source, json: string) => {
       this.onEvent(JSON.parse(json) as CaptureEvent);
     });
     await this.context.addInitScript(CAPTURE_SCRIPT);
@@ -62,7 +62,7 @@ export class Recorder {
       if (frame === this._page.mainFrame()) this.onNavigation(frame.url(), Date.now());
     });
     this.context.on('page', (p) => {
-      if (p !== this._page) console.warn('flowrec: new tab opened — not recorded (v1 records first tab only)');
+      if (p !== this._page) console.warn('wtf: new tab opened — not recorded (v1 records first tab only)');
     });
     this.context.on('close', () => {
       if (!this.stopped) {
@@ -140,7 +140,7 @@ export class Recorder {
         await this._page.screenshot({ path: join(this.opts.out, shotFile), fullPage: true });
         this.graph.setShot(node.id, shotFile);
       } catch (err) {
-        console.warn(`flowrec: screenshot failed for ${node.url}: ${String(err)}`);
+        console.warn(`wtf: screenshot failed for ${node.url}: ${String(err)}`);
       }
     }
   }

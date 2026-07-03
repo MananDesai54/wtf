@@ -1,6 +1,6 @@
 {
-  "name": "flowrec importer",
-  "id": "flowrec-importer-local",
+  "name": "wtf importer",
+  "id": "wtf-importer-local",
   "api": "1.0.0",
   "main": "dist/code.js",
   "ui": "src/ui.html",
