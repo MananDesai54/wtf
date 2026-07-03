@@ -1,0 +1,57 @@
+<style>
+  body { font: 12px/1.5 sans-serif; margin: 12px; }
+  #log { white-space: pre-wrap; color: #444; margin-top: 8px; max-height: 120px; overflow-y: auto; }
+  .err { color: #c00; }
+</style>
+<h3>flowrec importer</h3>
+<input type="file" id="file" accept=".json" />
+<div id="log"></div>
+<script>
+  const logEl = document.getElementById('log');
+  const log = (m, cls) => {
+    const d = document.createElement('div');
+    d.textContent = m;
+    if (cls) d.className = cls;
+    logEl.appendChild(d);
+  };
+
+  const b64ToBytes = (b64) => {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  };
+
+  document.getElementById('file').addEventListener('change', async (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    log('reading ' + file.name + '…');
+    let bundle;
+    try {
+      bundle = JSON.parse(await file.text());
+    } catch (e) {
+      log('invalid JSON: ' + e.message, 'err');
+      return;
+    }
+
+    const imagePayloads = [];
+    for (const node of bundle.nodes || []) {
+      if (node.image && node.image.base64) {
+        imagePayloads.push({ nodeId: node.id, bytes: b64ToBytes(node.image.base64) });
+        delete node.image.base64;
+      }
+    }
+
+    parent.postMessage({ pluginMessage: { type: 'bundle', json: JSON.stringify(bundle) } }, '*');
+    for (const p of imagePayloads) {
+      parent.postMessage({ pluginMessage: { type: 'image', nodeId: p.nodeId, bytes: p.bytes } }, '*');
+    }
+    parent.postMessage({ pluginMessage: { type: 'build' } }, '*');
+  });
+
+  onmessage = (ev) => {
+    const msg = ev.data.pluginMessage;
+    if (!msg) return;
+    log(msg.message, msg.type === 'error' ? 'err' : undefined);
+  };
+</script>

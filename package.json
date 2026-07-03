@@ -1,0 +1,7 @@
+{
+  "name": "flowrec-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "devDependencies": {}
+}
