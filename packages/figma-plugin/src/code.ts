@@ -59,75 +59,94 @@ async function build(bundle: Bundle, warnings: string[]): Promise<void> {
   const frames = new Map<string, FrameNode>();
   const created: SceneNode[] = [];
 
-  for (const n of bundle.nodes) {
-    const p = placements.get(n.id)!;
-    const s = sizes.get(n.id)!;
-    const frame = figma.createFrame();
-    frame.name = `${n.title || 'untitled'} — ${n.url}`;
-    frame.x = p.x;
-    frame.y = p.y;
-    frame.resize(Math.max(s.width, 1), Math.max(s.height, 1));
-    const bytes = images.get(n.id);
-    if (bytes) {
-      const image = figma.createImage(bytes);
-      frame.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }];
-    } else {
-      status(`warning: no screenshot for ${n.url}`);
-      frame.fills = [{ type: 'SOLID', color: { r: 0.95, g: 0.95, b: 0.95 } }];
+  try {
+    for (const n of bundle.nodes) {
+      const p = placements.get(n.id)!;
+      const s = sizes.get(n.id)!;
+      const frame = figma.createFrame();
+      frame.name = `${n.title || 'untitled'} — ${n.url}`;
+      frame.x = p.x;
+      frame.y = p.y;
+      frame.resize(Math.max(s.width, 1), Math.max(s.height, 1));
+      const bytes = images.get(n.id);
+      let imageApplied = false;
+      if (bytes) {
+        try {
+          const image = figma.createImage(bytes);
+          frame.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }];
+          imageApplied = true;
+        } catch {
+          status(`warning: bad image for ${n.url}, using placeholder`);
+        }
+      }
+      if (!imageApplied) {
+        if (!bytes) status(`warning: no screenshot for ${n.url}`);
+        frame.fills = [{ type: 'SOLID', color: { r: 0.95, g: 0.95, b: 0.95 } }];
+      }
+      frames.set(n.id, frame);
+      created.push(frame);
+
+      if (n.note) {
+        const noteFrame = figma.createFrame();
+        noteFrame.name = `note: ${n.title || n.url}`;
+        noteFrame.fills = [{ type: 'SOLID', color: { r: 1, g: 0.92, b: 0.55 } }];
+        noteFrame.x = p.x;
+        noteFrame.y = p.y - 96;
+        noteFrame.resize(Math.max(Math.min(s.width, 480), 100), 80);
+        const text = figma.createText();
+        text.characters = n.note;
+        text.fontSize = 14;
+        text.x = 12;
+        text.y = 12;
+        noteFrame.appendChild(text);
+        created.push(noteFrame);
+      }
     }
-    frames.set(n.id, frame);
-    created.push(frame);
 
-    if (n.note) {
-      const noteFrame = figma.createFrame();
-      noteFrame.name = `note: ${n.title || n.url}`;
-      noteFrame.fills = [{ type: 'SOLID', color: { r: 1, g: 0.92, b: 0.55 } }];
-      noteFrame.x = p.x;
-      noteFrame.y = p.y - 96;
-      noteFrame.resize(Math.max(Math.min(s.width, 480), 100), 80);
-      const text = figma.createText();
-      text.characters = n.note;
-      text.fontSize = 14;
-      text.x = 12;
-      text.y = 12;
-      noteFrame.appendChild(text);
-      created.push(noteFrame);
+    for (const e of bundle.edges) {
+      const src = frames.get(e.from)!;
+      const dst = frames.get(e.to)!;
+      const s2 = sizes.get(e.from)!;
+
+      const hotspot = figma.createRectangle();
+      hotspot.name = e.label ? `click: ${e.label}` : 'click';
+      const hs = {
+        x: Math.min(Math.max(e.bbox.x, 0), Math.max(s2.width - 4, 0)),
+        y: Math.min(Math.max(e.bbox.y, 0), Math.max(s2.height - 4, 0)),
+      };
+      const hw = Math.max(Math.min(e.bbox.w, s2.width - hs.x), 4);
+      const hh = Math.max(Math.min(e.bbox.h, s2.height - hs.y), 4);
+      hotspot.x = hs.x;
+      hotspot.y = hs.y;
+      hotspot.resize(hw, hh);
+      hotspot.fills = [{ type: 'SOLID', color: { r: 0.05, g: 0.45, b: 1 }, opacity: 0.1 }];
+      hotspot.strokes = [{ type: 'SOLID', color: { r: 0.05, g: 0.45, b: 1 } }];
+      hotspot.strokeWeight = 2;
+      src.appendChild(hotspot);
+
+      await hotspot.setReactionsAsync([{
+        trigger: { type: 'ON_CLICK' },
+        actions: [{ type: 'NODE', destinationId: dst.id, navigation: 'NAVIGATE', transition: null, preserveScrollPosition: false }],
+      }]);
+
+      const start = { x: src.x + hs.x + hw, y: src.y + hs.y + hh / 2 };
+      const end = { x: dst.x, y: dst.y + 40 };
+      const arrow = makeArrow(start, end);
+      arrow.name = e.label ? `flow: ${e.label}` : 'flow';
+      created.push(arrow);
+
+      if (e.label) {
+        const label = figma.createText();
+        label.characters = e.label;
+        label.fontSize = 12;
+        label.x = (start.x + end.x) / 2 - 40;
+        label.y = (start.y + end.y) / 2 - 20;
+        created.push(label);
+      }
     }
-  }
-
-  for (const e of bundle.edges) {
-    const src = frames.get(e.from)!;
-    const dst = frames.get(e.to)!;
-
-    const hotspot = figma.createRectangle();
-    hotspot.name = e.label ? `click: ${e.label}` : 'click';
-    hotspot.x = e.bbox.x;
-    hotspot.y = e.bbox.y;
-    hotspot.resize(Math.max(e.bbox.w, 4), Math.max(e.bbox.h, 4));
-    hotspot.fills = [{ type: 'SOLID', color: { r: 0.05, g: 0.45, b: 1 }, opacity: 0.1 }];
-    hotspot.strokes = [{ type: 'SOLID', color: { r: 0.05, g: 0.45, b: 1 } }];
-    hotspot.strokeWeight = 2;
-    src.appendChild(hotspot);
-
-    await hotspot.setReactionsAsync([{
-      trigger: { type: 'ON_CLICK' },
-      actions: [{ type: 'NODE', destinationId: dst.id, navigation: 'NAVIGATE', transition: null, preserveScrollPosition: false }],
-    }]);
-
-    const start = { x: src.x + e.bbox.x + Math.max(e.bbox.w, 4), y: src.y + e.bbox.y + Math.max(e.bbox.h, 4) / 2 };
-    const end = { x: dst.x, y: dst.y + 40 };
-    const arrow = makeArrow(start, end);
-    arrow.name = e.label ? `flow: ${e.label}` : 'flow';
-    created.push(arrow);
-
-    if (e.label) {
-      const label = figma.createText();
-      label.characters = e.label;
-      label.fontSize = 12;
-      label.x = (start.x + end.x) / 2 - 40;
-      label.y = (start.y + end.y) / 2 - 20;
-      created.push(label);
-    }
+  } catch (err) {
+    for (const n of created) n.remove();
+    throw err;
   }
 
   figma.viewport.scrollAndZoomIntoView(created);
