@@ -57,4 +57,41 @@ describe('exportSession', () => {
     // bbox on edge from p2 scaled by 0.5
     expect(bundle.edges[0].bbox).toEqual({ x: 2000, y: 5, w: 100, h: 10 });
   });
+
+  it('emits image:null for nodes without a screenshot and leaves their edges unscaled', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'flowrec-exp2-'));
+    mkdirSync(join(dir, 'shots'));
+    const graph: GraphData = {
+      startUrl: 'https://a.com/',
+      recordedAt: '2026-07-03T00:00:00Z',
+      nodes: [
+        { id: 'p1', url: 'https://a.com/', title: 'NoShot', shotFile: null, viewport: { width: 800, height: 600 }, timestamp: 1 },
+        { id: 'p2', url: 'https://a.com/x', title: 'X', shotFile: null, viewport: { width: 800, height: 600 }, timestamp: 2 },
+      ],
+      edges: [
+        { from: 'p1', to: 'p2', label: 'Go', bbox: { x: 10, y: 20, w: 30, h: 40 }, timestamp: 3 },
+      ],
+    };
+    writeFileSync(join(dir, 'graph.json'), JSON.stringify(graph));
+    const out = join(dir, 'figma-import.json');
+    await exportSession(dir, out);
+    const bundle = JSON.parse(readFileSync(out, 'utf8'));
+    expect(bundle.nodes[0].image).toBeNull();
+    expect(bundle.edges[0].bbox).toEqual({ x: 10, y: 20, w: 30, h: 40 });
+  });
+
+  it('fails with node context when a screenshot file is missing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'flowrec-exp3-'));
+    mkdirSync(join(dir, 'shots'));
+    const graph: GraphData = {
+      startUrl: 'https://a.com/',
+      recordedAt: '2026-07-03T00:00:00Z',
+      nodes: [
+        { id: 'p1', url: 'https://a.com/', title: 'Gone', shotFile: 'shots/0001.png', viewport: { width: 800, height: 600 }, timestamp: 1 },
+      ],
+      edges: [],
+    };
+    writeFileSync(join(dir, 'graph.json'), JSON.stringify(graph));
+    await expect(exportSession(dir, join(dir, 'figma-import.json'))).rejects.toThrow(/node p1/);
+  });
 });
