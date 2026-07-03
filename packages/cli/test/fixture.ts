@@ -14,10 +14,26 @@ const TWO = `<!doctype html><title>Two</title>
 <button id="spa2" style="display:block;width:140px;height:40px"
   onclick="history.pushState({}, '', '/four')">Open Four</button>`;
 
+// 1x1 red PNG
+export const RED_PIXEL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+const RICH = `<!doctype html><title>Rich</title>
+<body style="margin:0">
+<h1 id="hd" style="font-size:32px;font-weight:700;text-align:center">Heading Text</h1>
+<p id="para">Paragraph content here</p>
+<button id="btn" style="background:#2f7cf6;color:#fff;border-radius:6px;border:0;padding:10px 20px">Click Me</button>
+<img id="pic" src="${RED_PIXEL}" width="50" height="50">
+<svg id="vec" width="40" height="40"><circle cx="20" cy="20" r="15"/></svg>
+<div id="hidden" style="display:none">Invisible text</div>
+<div id="deep" style="position:absolute;top:2000px;left:10px">Below fold text</div>
+</body>`;
+
 export function startFixture(): Promise<{ url: string; server: Server }> {
   const server = createServer((req, res) => {
     res.setHeader('content-type', 'text/html');
-    if (req.url === '/two.html' || req.url === '/three') res.end(TWO);
+    if (req.url === '/rich.html') res.end(RICH);
+    else if (req.url === '/two.html' || req.url === '/three') res.end(TWO);
     else res.end(INDEX);
   });
   return new Promise((resolve) => {
