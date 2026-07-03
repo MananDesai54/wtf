@@ -13,7 +13,8 @@ program
   .option('--out <dir>', 'session output directory')
   .option('--profile <dir>', 'persistent browser profile dir (keeps logins)')
   .option('--viewport <size>', 'viewport WxH', '1440x900')
-  .action(async (opts: { url: string; out?: string; profile?: string; viewport: string }) => {
+  .option('--interactive', 'capture pages as editable Figma layers (DOM) instead of screenshots')
+  .action(async (opts: { url: string; out?: string; profile?: string; viewport: string; interactive?: boolean }) => {
     const m = /^(\d+)x(\d+)$/.exec(opts.viewport);
     if (!m) { console.error('invalid --viewport, expected WxH e.g. 1440x900'); process.exit(1); }
     const out = resolve(opts.out ?? `wtf-session-${Date.now()}`);
@@ -23,6 +24,7 @@ program
       out,
       profile: opts.profile,
       viewport: { width: Number(m[1]), height: Number(m[2]) },
+      interactive: opts.interactive,
     });
 
     const finish = async () => {

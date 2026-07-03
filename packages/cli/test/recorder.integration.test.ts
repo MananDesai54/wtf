@@ -190,4 +190,36 @@ describe('Recorder', () => {
 
     await rec.stop();
   }, 60_000);
+
+  it('interactive mode captures serialized DOM instead of screenshots', async () => {
+    const out6 = mkdtempSync(join(tmpdir(), 'wtf-it6-'));
+    const rec = new Recorder({
+      url: baseUrl + 'rich.html',
+      out: out6,
+      viewport: { width: 800, height: 600 },
+      headless: true,
+      interactive: true,
+    });
+    await rec.start();
+    const page = rec.page;
+
+    await page.waitForSelector('#__wtf_capture_btn');
+    await page.click('#__wtf_capture_btn');
+    await page.waitForTimeout(700);
+    await rec.stop();
+
+    const graph: GraphData = JSON.parse(readFileSync(join(out6, 'graph.json'), 'utf8'));
+    expect(graph.nodes).toHaveLength(1);
+    expect(graph.nodes[0].shotFile).toBeNull();
+    expect(graph.nodes[0].domFile).toBe('dom/0001.json');
+
+    const dom = JSON.parse(readFileSync(join(out6, graph.nodes[0].domFile!), 'utf8'));
+    expect(dom.height).toBeGreaterThanOrEqual(2000);
+    expect(dom.elements.some((e: { kind: string; text?: string }) => e.kind === 'text' && e.text === 'Below fold text')).toBe(true);
+    // data-URI image bytes captured without network
+    const img = dom.elements.find((e: { kind: string }) => e.kind === 'image');
+    expect(img).toBeDefined();
+    expect(dom.imageData[img.imageId].base64.length).toBeGreaterThan(10);
+    expect(dom.imageData[img.imageId].mime).toBe('image/png');
+  }, 60_000);
 });
