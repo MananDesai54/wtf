@@ -1,25 +1,30 @@
-import { validateBundle, type Bundle } from './validate.js';
+import { validateBundle, type Bundle, type BundleDom } from './validate.js';
 import { computeLayout, type Size } from './layout.js';
+import { fontStyleForWeight, solidPaint } from './dom-render.js';
 
 figma.showUI(__html__, { width: 340, height: 220 });
 
 let pendingBundle: Bundle | null = null;
 let pendingWarnings: string[] = [];
 const images = new Map<string, Uint8Array>();
+const domImages = new Map<string, Uint8Array>();
 
 const status = (message: string) => figma.ui.postMessage({ type: 'status', message });
 const fail = (message: string) => figma.ui.postMessage({ type: 'error', message });
 
-figma.ui.onmessage = async (msg: { type: string; json?: string; nodeId?: string; bytes?: Uint8Array }) => {
+figma.ui.onmessage = async (msg: { type: string; json?: string; nodeId?: string; imageId?: string; bytes?: Uint8Array }) => {
   if (msg.type === 'bundle' && msg.json) {
     const { bundle, errors, warnings } = validateBundle(JSON.parse(msg.json));
     if (!bundle) { fail(errors.join('; ')); return; }
     pendingBundle = bundle;
     pendingWarnings = warnings;
     images.clear();
+    domImages.clear();
     status(`bundle ok: ${bundle.nodes.length} pages, ${bundle.edges.length} connections`);
   } else if (msg.type === 'image' && msg.nodeId && msg.bytes) {
     images.set(msg.nodeId, msg.bytes);
+  } else if (msg.type === 'dom-image' && msg.nodeId && msg.imageId && msg.bytes) {
+    domImages.set(`${msg.nodeId}/${msg.imageId}`, msg.bytes);
   } else if (msg.type === 'build') {
     if (!pendingBundle) { fail('no bundle loaded'); return; }
     try {
@@ -44,15 +49,63 @@ function makeArrow(from: { x: number; y: number }, to: { x: number; y: number })
   return line;
 }
 
+function renderDom(frame: FrameNode, nodeId: string, dom: BundleDom): void {
+  for (const el of dom.elements) {
+    if (el.kind === 'rect') {
+      const r = figma.createRectangle();
+      r.x = el.x; r.y = el.y;
+      r.resize(Math.max(el.w, 1), Math.max(el.h, 1));
+      r.fills = el.bg ? [solidPaint(el.bg)] : [];
+      if (el.borderColor) {
+        r.strokes = [solidPaint(el.borderColor)];
+        r.strokeWeight = el.borderWidth ?? 1;
+      }
+      if (el.radius) r.cornerRadius = el.radius;
+      frame.appendChild(r);
+    } else if (el.kind === 'text') {
+      const t = figma.createText();
+      t.fontName = { family: 'Inter', style: fontStyleForWeight(el.fontWeight) };
+      t.characters = el.text;
+      t.fontSize = Math.max(el.fontSize, 1);
+      t.fills = [solidPaint(el.color)];
+      t.textAlignHorizontal = el.align === 'center' ? 'CENTER' : el.align === 'right' ? 'RIGHT' : 'LEFT';
+      t.textAutoResize = 'NONE';
+      t.x = el.x; t.y = el.y;
+      t.resize(Math.max(el.w, 1), Math.max(el.h, 1));
+      frame.appendChild(t);
+    } else {
+      const r = figma.createRectangle();
+      r.x = el.x; r.y = el.y;
+      r.resize(Math.max(el.w, 1), Math.max(el.h, 1));
+      const bytes = domImages.get(`${nodeId}/${el.imageId}`);
+      let filled = false;
+      if (bytes) {
+        try {
+          r.fills = [{ type: 'IMAGE', imageHash: figma.createImage(bytes).hash, scaleMode: 'FILL' }];
+          filled = true;
+        } catch { /* fall through to placeholder */ }
+      }
+      if (!filled) r.fills = [{ type: 'SOLID', color: { r: 0.85, g: 0.85, b: 0.85 } }];
+      if (el.radius) r.cornerRadius = el.radius;
+      frame.appendChild(r);
+    }
+  }
+}
+
 async function build(bundle: Bundle, warnings: string[]): Promise<void> {
-  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+  await Promise.all([
+    figma.loadFontAsync({ family: 'Inter', style: 'Regular' }),
+    figma.loadFontAsync({ family: 'Inter', style: 'Bold' }),
+  ]);
   for (const w of warnings) status(`warning: ${w}`);
 
   const sizes = new Map<string, Size>();
   for (const n of bundle.nodes) {
-    sizes.set(n.id, n.image
-      ? { width: n.image.width, height: n.image.height }
-      : { width: n.viewport.width, height: n.viewport.height });
+    sizes.set(n.id, n.dom
+      ? { width: n.dom.width, height: n.dom.height }
+      : n.image
+        ? { width: n.image.width, height: n.image.height }
+        : { width: n.viewport.width, height: n.viewport.height });
   }
   const placements = computeLayout(bundle.nodes.map((n) => n.id), bundle.edges, sizes);
 
@@ -69,8 +122,12 @@ async function build(bundle: Bundle, warnings: string[]): Promise<void> {
       frame.y = p.y;
       frame.resize(Math.max(s.width, 1), Math.max(s.height, 1));
       const bytes = images.get(n.id);
-      let imageApplied = false;
-      if (bytes) {
+      if (n.dom) {
+        frame.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+        renderDom(frame, n.id, n.dom);
+        if (n.dom.truncated) status(`warning: dom capture truncated for ${n.url}`);
+      } else if (bytes) {
+        let imageApplied = false;
         try {
           const image = figma.createImage(bytes);
           frame.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }];
@@ -78,9 +135,11 @@ async function build(bundle: Bundle, warnings: string[]): Promise<void> {
         } catch {
           status(`warning: bad image for ${n.url}, using placeholder`);
         }
-      }
-      if (!imageApplied) {
-        if (!bytes) status(`warning: no screenshot for ${n.url}`);
+        if (!imageApplied) {
+          frame.fills = [{ type: 'SOLID', color: { r: 0.95, g: 0.95, b: 0.95 } }];
+        }
+      } else {
+        status(`warning: no screenshot for ${n.url}`);
         frame.fills = [{ type: 'SOLID', color: { r: 0.95, g: 0.95, b: 0.95 } }];
       }
       frames.set(n.id, frame);

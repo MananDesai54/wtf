@@ -42,9 +42,24 @@
       }
     }
 
+    const domImagePayloads = [];
+    for (const node of bundle.nodes || []) {
+      if (node.dom && node.dom.images) {
+        for (const [imageId, img] of Object.entries(node.dom.images)) {
+          if (img.base64) {
+            domImagePayloads.push({ nodeId: node.id, imageId, bytes: b64ToBytes(img.base64) });
+            delete img.base64;
+          }
+        }
+      }
+    }
+
     parent.postMessage({ pluginMessage: { type: 'bundle', json: JSON.stringify(bundle) } }, '*');
     for (const p of imagePayloads) {
       parent.postMessage({ pluginMessage: { type: 'image', nodeId: p.nodeId, bytes: p.bytes } }, '*');
+    }
+    for (const p of domImagePayloads) {
+      parent.postMessage({ pluginMessage: { type: 'dom-image', nodeId: p.nodeId, imageId: p.imageId, bytes: p.bytes } }, '*');
     }
     parent.postMessage({ pluginMessage: { type: 'build' } }, '*');
   });
