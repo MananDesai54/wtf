@@ -1,10 +1,13 @@
 import { chromium, type BrowserContext, type Page } from 'playwright';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SessionGraph, type Viewport } from './graph.js';
 import { ClickTracker, type ClickEvent } from './attribution.js';
 import { CAPTURE_SCRIPT } from './capture-script.js';
 import { normalizeUrl } from './urls.js';
+import { SERIALIZE_SCRIPT } from './dom-serializer.js';
+import type { DomCapture, StoredDomCapture } from './dom-types.js';
+import { parseDataUri } from './data-uri.js';
 
 export interface RecordOptions {
   url: string;
@@ -12,6 +15,7 @@ export interface RecordOptions {
   profile?: string;
   viewport: Viewport;
   headless?: boolean;
+  interactive?: boolean;
 }
 
 type CaptureEvent =
@@ -31,6 +35,7 @@ export class Recorder {
   private pendingEdge: { from: string; click: ClickEvent } | null = null;
   private lastClick: ClickEvent | null = null;
   private shotSeq = 0;
+  private domSeq = 0;
   private stopped = false;
 
   onClose: (() => void) | null = null;
@@ -135,20 +140,55 @@ export class Recorder {
     this.pendingEdge = null;
     this.lastClick = null;
 
-    const shotFile = `shots/${String(++this.shotSeq).padStart(4, '0')}.png`;
-    try {
-      await this.setPanelVisible(page, false);
-      await page.screenshot({ path: join(this.opts.out, shotFile), fullPage: true });
-      this.graph.setShot(node.id, shotFile);
-    } catch (err) {
-      console.warn(`wtf: screenshot failed for ${node.url}: ${String(err)}`);
-    } finally {
-      await this.setPanelVisible(page, true);
+    if (this.opts.interactive) {
+      await this.captureDom(page, node.id, node.url);
+    } else {
+      const shotFile = `shots/${String(++this.shotSeq).padStart(4, '0')}.png`;
+      try {
+        await this.setPanelVisible(page, false);
+        await page.screenshot({ path: join(this.opts.out, shotFile), fullPage: true });
+        this.graph.setShot(node.id, shotFile);
+      } catch (err) {
+        console.warn(`wtf: screenshot failed for ${node.url}: ${String(err)}`);
+      } finally {
+        await this.setPanelVisible(page, true);
+      }
     }
 
     this.lastCaptured = { id: node.id, url: node.url, at: timestamp };
     this.currentNodeId = node.id;
     await this.updatePanel(page);
+  }
+
+  private async captureDom(page: Page, nodeId: string, nodeUrl: string): Promise<void> {
+    try {
+      const cap = (await page.evaluate(SERIALIZE_SCRIPT)) as DomCapture;
+      if (cap.truncated) console.warn(`wtf: dom capture truncated at element cap for ${nodeUrl}`);
+      const imageData: StoredDomCapture['imageData'] = {};
+      for (const [id, src] of Object.entries(cap.images)) {
+        const fetched = await this.fetchImage(src);
+        if (fetched) imageData[id] = fetched;
+        else console.warn(`wtf: image fetch failed: ${src.slice(0, 100)}`);
+      }
+      const stored: StoredDomCapture = { ...cap, imageData };
+      const domFile = `dom/${String(++this.domSeq).padStart(4, '0')}.json`;
+      writeFileSync(join(this.opts.out, domFile), JSON.stringify(stored));
+      this.graph.setDom(nodeId, domFile);
+    } catch (err) {
+      console.warn(`wtf: dom capture failed for ${nodeUrl}: ${String(err)}`);
+    }
+  }
+
+  private async fetchImage(src: string): Promise<{ mime: string; base64: string } | null> {
+    try {
+      if (src.startsWith('data:')) return parseDataUri(src);
+      const resp = await this.context.request.get(src);
+      if (!resp.ok()) return null;
+      const mime = resp.headers()['content-type']?.split(';')[0] || 'image/png';
+      return { mime, base64: (await resp.body()).toString('base64') };
+    } catch {
+      return null;
+    }
   }
 
   private async setPanelVisible(page: Page, visible: boolean): Promise<void> {

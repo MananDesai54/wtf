@@ -10,6 +10,7 @@ export interface PageNode {
   url: string;
   title: string;
   shotFile: string | null;
+  domFile: string | null;
   viewport: Viewport;
   note?: string;
   timestamp: number;
@@ -37,6 +38,7 @@ export class SessionGraph {
     private recordedAt: string,
   ) {
     mkdirSync(join(dir, 'shots'), { recursive: true });
+    mkdirSync(join(dir, 'dom'), { recursive: true });
   }
 
   markNextDistinct(): void {
@@ -48,7 +50,7 @@ export class SessionGraph {
     const existing = this.byUrl.get(key);
     if (existing && !this.forceNext) return { node: existing, isNew: false };
     this.forceNext = false;
-    const node: PageNode = { id: `p${++this.seq}`, url: key, title, shotFile: null, viewport, timestamp };
+    const node: PageNode = { id: `p${++this.seq}`, url: key, title, shotFile: null, domFile: null, viewport, timestamp };
     this.nodes.push(node);
     this.byUrl.set(key, node);
     this.save();
@@ -58,6 +60,11 @@ export class SessionGraph {
   setShot(nodeId: string, shotFile: string): void {
     const n = this.nodes.find((n) => n.id === nodeId);
     if (n) { n.shotFile = shotFile; this.save(); }
+  }
+
+  setDom(nodeId: string, domFile: string): void {
+    const n = this.nodes.find((n) => n.id === nodeId);
+    if (n) { n.domFile = domFile; this.save(); }
   }
 
   addEdge(from: string, to: string, label: string, bbox: BBox, timestamp: number): void {

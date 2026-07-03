@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import type { BBox, GraphData } from './graph.js';
+import type { StoredDomCapture } from './dom-types.js';
 
 export const MAX_DIM = 4096;
 
@@ -50,10 +51,29 @@ export async function exportSession(sessionDir: string, outFile: string): Promis
         throw new Error(`failed to process screenshot for node ${n.id} (${n.shotFile}): ${String(err)}`, { cause: err });
       }
     }
+    let dom: {
+      width: number; height: number; truncated?: boolean;
+      elements: StoredDomCapture['elements'];
+      images: StoredDomCapture['imageData'];
+    } | null = null;
+    if (n.domFile) {
+      try {
+        const raw: StoredDomCapture = JSON.parse(readFileSync(join(sessionDir, n.domFile), 'utf8'));
+        dom = {
+          width: raw.width,
+          height: raw.height,
+          ...(raw.truncated ? { truncated: true } : {}),
+          elements: raw.elements,
+          images: raw.imageData ?? {},
+        };
+      } catch (err) {
+        throw new Error(`failed to read dom capture for node ${n.id} (${n.domFile}): ${String(err)}`, { cause: err });
+      }
+    }
     nodes.push({
       id: n.id, url: n.url, title: n.title,
       ...(n.note ? { note: n.note } : {}),
-      viewport: n.viewport, image,
+      viewport: n.viewport, image, dom,
     });
   }
 
@@ -63,7 +83,7 @@ export async function exportSession(sessionDir: string, outFile: string): Promis
   }));
 
   const bundle = {
-    version: 1,
+    version: 2,
     startUrl: graph.startUrl,
     recordedAt: graph.recordedAt,
     nodes, edges,

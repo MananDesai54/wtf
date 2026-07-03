@@ -38,6 +38,20 @@ In the terminal:
 
 Launch flag: `--profile ~/.wtf-profile` → keep logins between sessions.
 
+### Interactive mode (editable layers)
+
+```bash
+node packages/cli/dist/index.js record --url https://your-app.com --interactive
+```
+
+Captures the page's DOM instead of a screenshot. In Figma you get real,
+editable layers — text you can retype, rectangles you can restyle, images —
+covering the whole page (content clipped in screenshots, like below-the-fold
+or scroll containers, is included). Fidelity notes: all text renders as
+Inter, gradients/shadows are approximated or dropped, and inline SVG/canvas/
+video become gray placeholders. Arrows, hotspots, and prototype wiring work
+the same as screenshot mode.
+
 ## Export
 
 ```bash

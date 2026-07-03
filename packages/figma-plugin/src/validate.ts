@@ -1,3 +1,23 @@
+export interface DomRGBA {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+export type BundleDomElement =
+  | { kind: 'rect'; x: number; y: number; w: number; h: number; bg?: DomRGBA; borderColor?: DomRGBA; borderWidth?: number; radius?: number }
+  | { kind: 'text'; x: number; y: number; w: number; h: number; text: string; fontSize: number; fontWeight: number; color: DomRGBA; align: 'left' | 'center' | 'right' }
+  | { kind: 'image'; x: number; y: number; w: number; h: number; imageId: string; radius?: number };
+
+export interface BundleDom {
+  width: number;
+  height: number;
+  truncated?: boolean;
+  elements: BundleDomElement[];
+  images: Record<string, { mime: string; base64?: string }>;
+}
+
 export interface BundleNode {
   id: string;
   url: string;
@@ -5,6 +25,7 @@ export interface BundleNode {
   note?: string;
   viewport: { width: number; height: number };
   image: { format: 'png'; base64?: string; width: number; height: number } | null;
+  dom?: BundleDom | null;
 }
 
 export interface BundleEdge {
@@ -15,7 +36,7 @@ export interface BundleEdge {
 }
 
 export interface Bundle {
-  version: 1;
+  version: 1 | 2;
   startUrl: string;
   recordedAt: string;
   nodes: BundleNode[];
@@ -67,7 +88,7 @@ export function validateBundle(raw: unknown): { bundle: Bundle | null; errors: s
     return { bundle: null, errors: ['bundle is not an object'], warnings };
   }
   const b = raw as Record<string, unknown>;
-  if (b.version !== 1) errors.push(`unsupported bundle version: ${String(b.version)} (expected 1)`);
+  if (b.version !== 1 && b.version !== 2) errors.push(`unsupported bundle version: ${String(b.version)} (expected 1 or 2)`);
   if (!Array.isArray(b.nodes) || b.nodes.length === 0) errors.push('bundle has no nodes');
   if (errors.length > 0) return { bundle: null, errors, warnings };
 
@@ -76,6 +97,16 @@ export function validateBundle(raw: unknown): { bundle: Bundle | null; errors: s
     if (!isValidNode(rawNodes[i])) {
       errors.push(`node at index ${i} is malformed`);
       return { bundle: null, errors, warnings };
+    }
+    const dom = (rawNodes[i] as { dom?: unknown }).dom;
+    if (dom !== undefined && dom !== null) {
+      const d = dom as Record<string, unknown>;
+      const malformedImages = d.images !== undefined && (typeof d.images !== 'object' || d.images === null || Array.isArray(d.images));
+      if (typeof d.width !== 'number' || typeof d.height !== 'number' || !Array.isArray(d.elements) || malformedImages) {
+        errors.push(`node at index ${i} has malformed dom`);
+        return { bundle: null, errors, warnings };
+      }
+      d.images = d.images ?? {};
     }
   }
   const nodes = rawNodes as BundleNode[];
@@ -94,7 +125,7 @@ export function validateBundle(raw: unknown): { bundle: Bundle | null; errors: s
 
   return {
     bundle: {
-      version: 1,
+      version: b.version as 1 | 2,
       startUrl: String(b.startUrl ?? ''),
       recordedAt: String(b.recordedAt ?? ''),
       nodes,

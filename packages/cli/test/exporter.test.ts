@@ -35,8 +35,8 @@ describe('exportSession', () => {
       startUrl: 'https://a.com/',
       recordedAt: '2026-07-03T00:00:00Z',
       nodes: [
-        { id: 'p1', url: 'https://a.com/', title: 'Home', shotFile: 'shots/0001.png', viewport: { width: 1000, height: 100 }, timestamp: 1 },
-        { id: 'p2', url: 'https://a.com/big', title: 'Big', shotFile: 'shots/0002.png', viewport: { width: 8192, height: 64 }, note: 'wide page', timestamp: 2 },
+        { id: 'p1', url: 'https://a.com/', title: 'Home', shotFile: 'shots/0001.png', domFile: null, viewport: { width: 1000, height: 100 }, timestamp: 1 },
+        { id: 'p2', url: 'https://a.com/big', title: 'Big', shotFile: 'shots/0002.png', domFile: null, viewport: { width: 8192, height: 64 }, note: 'wide page', timestamp: 2 },
       ],
       edges: [
         { from: 'p2', to: 'p1', label: 'Back', bbox: { x: 4000, y: 10, w: 200, h: 20 }, timestamp: 3 },
@@ -48,7 +48,7 @@ describe('exportSession', () => {
     await exportSession(dir, out);
     const bundle = JSON.parse(readFileSync(out, 'utf8'));
 
-    expect(bundle.version).toBe(1);
+    expect(bundle.version).toBe(2);
     expect(bundle.nodes).toHaveLength(2);
     expect(bundle.nodes[0].image.width).toBe(1000);
     expect(bundle.nodes[1].image.width).toBe(MAX_DIM);
@@ -65,8 +65,8 @@ describe('exportSession', () => {
       startUrl: 'https://a.com/',
       recordedAt: '2026-07-03T00:00:00Z',
       nodes: [
-        { id: 'p1', url: 'https://a.com/', title: 'NoShot', shotFile: null, viewport: { width: 800, height: 600 }, timestamp: 1 },
-        { id: 'p2', url: 'https://a.com/x', title: 'X', shotFile: null, viewport: { width: 800, height: 600 }, timestamp: 2 },
+        { id: 'p1', url: 'https://a.com/', title: 'NoShot', shotFile: null, domFile: null, viewport: { width: 800, height: 600 }, timestamp: 1 },
+        { id: 'p2', url: 'https://a.com/x', title: 'X', shotFile: null, domFile: null, viewport: { width: 800, height: 600 }, timestamp: 2 },
       ],
       edges: [
         { from: 'p1', to: 'p2', label: 'Go', bbox: { x: 10, y: 20, w: 30, h: 40 }, timestamp: 3 },
@@ -87,11 +87,48 @@ describe('exportSession', () => {
       startUrl: 'https://a.com/',
       recordedAt: '2026-07-03T00:00:00Z',
       nodes: [
-        { id: 'p1', url: 'https://a.com/', title: 'Gone', shotFile: 'shots/0001.png', viewport: { width: 800, height: 600 }, timestamp: 1 },
+        { id: 'p1', url: 'https://a.com/', title: 'Gone', shotFile: 'shots/0001.png', domFile: null, viewport: { width: 800, height: 600 }, timestamp: 1 },
       ],
       edges: [],
     };
     writeFileSync(join(dir, 'graph.json'), JSON.stringify(graph));
     await expect(exportSession(dir, join(dir, 'figma-import.json'))).rejects.toThrow(/node p1/);
+  });
+
+  it('bundles dom captures verbatim without rescaling their edges', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wtf-exp4-'));
+    mkdirSync(join(dir, 'shots'));
+    mkdirSync(join(dir, 'dom'));
+    const stored = {
+      width: 900, height: 5000,
+      elements: [
+        { kind: 'text', x: 10, y: 20, w: 100, h: 30, text: 'Hi', fontSize: 16, fontWeight: 400, color: { r: 0, g: 0, b: 0, a: 1 }, align: 'left' },
+      ],
+      images: { img1: 'https://a.com/x.png' },
+      imageData: { img1: { mime: 'image/png', base64: 'QUJD' } },
+    };
+    writeFileSync(join(dir, 'dom', '0001.json'), JSON.stringify(stored));
+    const graph: GraphData = {
+      startUrl: 'https://a.com/',
+      recordedAt: '2026-07-03T00:00:00Z',
+      nodes: [
+        { id: 'p1', url: 'https://a.com/', title: 'Dom', shotFile: null, domFile: 'dom/0001.json', viewport: { width: 900, height: 600 }, timestamp: 1 },
+        { id: 'p2', url: 'https://a.com/x', title: 'X', shotFile: null, domFile: null, viewport: { width: 900, height: 600 }, timestamp: 2 },
+      ],
+      edges: [
+        { from: 'p1', to: 'p2', label: 'Go', bbox: { x: 700, y: 4500, w: 100, h: 40 }, timestamp: 3 },
+      ],
+    };
+    writeFileSync(join(dir, 'graph.json'), JSON.stringify(graph));
+    const out = join(dir, 'figma-import.json');
+    await exportSession(dir, out);
+    const bundle = JSON.parse(readFileSync(out, 'utf8'));
+    expect(bundle.version).toBe(2);
+    expect(bundle.nodes[0].image).toBeNull();
+    expect(bundle.nodes[0].dom.height).toBe(5000);
+    expect(bundle.nodes[0].dom.elements).toHaveLength(1);
+    expect(bundle.nodes[0].dom.images.img1).toEqual({ mime: 'image/png', base64: 'QUJD' });
+    // dom edges NOT rescaled even though height 5000 > 4096
+    expect(bundle.edges[0].bbox).toEqual({ x: 700, y: 4500, w: 100, h: 40 });
   });
 });
