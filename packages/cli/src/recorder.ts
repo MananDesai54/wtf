@@ -7,6 +7,7 @@ import { CAPTURE_SCRIPT } from './capture-script.js';
 import { normalizeUrl } from './urls.js';
 import { SERIALIZE_SCRIPT } from './dom-serializer.js';
 import type { DomCapture, StoredDomCapture } from './dom-types.js';
+import { parseDataUri } from './data-uri.js';
 
 export interface RecordOptions {
   url: string;
@@ -180,13 +181,7 @@ export class Recorder {
 
   private async fetchImage(src: string): Promise<{ mime: string; base64: string } | null> {
     try {
-      if (src.startsWith('data:')) {
-        const m = /^data:([^;,]+)?(;base64)?,(.*)$/.exec(src);
-        if (!m) return null;
-        const mime = m[1] || 'image/png';
-        const base64 = m[2] ? m[3] : Buffer.from(decodeURIComponent(m[3])).toString('base64');
-        return { mime, base64 };
-      }
+      if (src.startsWith('data:')) return parseDataUri(src);
       const resp = await this.context.request.get(src);
       if (!resp.ok()) return null;
       const mime = resp.headers()['content-type']?.split(';')[0] || 'image/png';

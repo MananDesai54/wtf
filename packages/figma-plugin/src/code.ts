@@ -63,6 +63,7 @@ function renderDom(frame: FrameNode, nodeId: string, dom: BundleDom): void {
       if (el.radius) r.cornerRadius = el.radius;
       frame.appendChild(r);
     } else if (el.kind === 'text') {
+      if (!el.text) continue;
       const t = figma.createText();
       t.fontName = { family: 'Inter', style: fontStyleForWeight(el.fontWeight) };
       t.characters = el.text;

@@ -71,4 +71,16 @@ describe('validateBundle', () => {
     expect(r.bundle).toBeNull();
     expect(r.errors[0]).toMatch(/malformed dom/);
   });
+
+  it('accepts v2 nodes with dom explicitly null', () => {
+    const r = validateBundle({ ...good, version: 2, nodes: [{ ...good.nodes[0], dom: null }, good.nodes[1]] });
+    expect(r.bundle).not.toBeNull();
+    expect(r.errors).toEqual([]);
+  });
+
+  it('rejects dom with non-object images', () => {
+    const r = validateBundle({ ...good, version: 2, nodes: [{ ...good.nodes[0], dom: { width: 1, height: 1, elements: [], images: 5 } }, good.nodes[1]] });
+    expect(r.bundle).toBeNull();
+    expect(r.errors[0]).toMatch(/malformed dom/);
+  });
 });

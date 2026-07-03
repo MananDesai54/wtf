@@ -101,10 +101,12 @@ export function validateBundle(raw: unknown): { bundle: Bundle | null; errors: s
     const dom = (rawNodes[i] as { dom?: unknown }).dom;
     if (dom !== undefined && dom !== null) {
       const d = dom as Record<string, unknown>;
-      if (typeof d.width !== 'number' || typeof d.height !== 'number' || !Array.isArray(d.elements)) {
+      const malformedImages = d.images !== undefined && (typeof d.images !== 'object' || d.images === null || Array.isArray(d.images));
+      if (typeof d.width !== 'number' || typeof d.height !== 'number' || !Array.isArray(d.elements) || malformedImages) {
         errors.push(`node at index ${i} has malformed dom`);
         return { bundle: null, errors, warnings };
       }
+      d.images = d.images ?? {};
     }
   }
   const nodes = rawNodes as BundleNode[];
