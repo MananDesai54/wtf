@@ -56,6 +56,12 @@ describe('SERIALIZE_SCRIPT', () => {
     // svg becomes a placeholder rect (no crash, no descent)
     expect(cap.elements.some((e) => e.kind === 'rect' && e.w === 40 && e.h === 40)).toBe(true);
 
+    // single-line text carries no wrap flag; multi-line text is marked wrap
+    if (heading?.kind === 'text') expect(heading.wrap).toBeUndefined();
+    const wrapped = texts.find((t) => t.kind === 'text' && t.text.startsWith('This is a longer sentence'));
+    expect(wrapped).toBeDefined();
+    if (wrapped?.kind === 'text') expect(wrapped.wrap).toBe(true);
+
     await page.close();
   }, 30_000);
 });

@@ -79,13 +79,19 @@ export const SERIALIZE_SCRIPT = `(() => {
       if (direct) {
         const color = parseColor(cs.color) || { r: 0, g: 0, b: 0, a: 1 };
         const align = cs.textAlign === 'center' ? 'center' : cs.textAlign === 'right' ? 'right' : 'left';
-        elements.push({
+        const fontSize = parseFloat(cs.fontSize) || 14;
+        const lineHeight = parseFloat(cs.lineHeight) || fontSize * 1.2;
+        const entry = {
           kind: 'text', x: rect.x, y: rect.y, w: rect.w, h: rect.h,
           text: direct.slice(0, 2000),
-          fontSize: parseFloat(cs.fontSize) || 14,
+          fontSize: fontSize,
           fontWeight: parseInt(cs.fontWeight, 10) || 400,
           color: color, align: align,
-        });
+        };
+        // taller than ~1.5 lines = browser wrapped it; single-line text must
+        // not re-wrap in Figma (Inter is often wider than the source font)
+        if (rect.h >= lineHeight * 1.5) entry.wrap = true;
+        elements.push(entry);
       }
     }
 

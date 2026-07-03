@@ -26,6 +26,7 @@ const RICH = `<!doctype html><title>Rich</title>
 <img id="pic" src="${RED_PIXEL}" width="50" height="50">
 <svg id="vec" width="40" height="40"><circle cx="20" cy="20" r="15"/></svg>
 <div id="hidden" style="display:none">Invisible text</div>
+<div id="wrapme" style="width:120px">This is a longer sentence that definitely wraps onto multiple lines</div>
 <div id="deep" style="position:absolute;top:2000px;left:10px">Below fold text</div>
 </body>`;
 

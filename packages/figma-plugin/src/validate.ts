@@ -7,7 +7,7 @@ export interface DomRGBA {
 
 export type BundleDomElement =
   | { kind: 'rect'; x: number; y: number; w: number; h: number; bg?: DomRGBA; borderColor?: DomRGBA; borderWidth?: number; radius?: number }
-  | { kind: 'text'; x: number; y: number; w: number; h: number; text: string; fontSize: number; fontWeight: number; color: DomRGBA; align: 'left' | 'center' | 'right' }
+  | { kind: 'text'; x: number; y: number; w: number; h: number; text: string; fontSize: number; fontWeight: number; color: DomRGBA; align: 'left' | 'center' | 'right'; wrap?: boolean }
   | { kind: 'image'; x: number; y: number; w: number; h: number; imageId: string; radius?: number };
 
 export interface BundleDom {

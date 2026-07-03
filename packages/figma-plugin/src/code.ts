@@ -70,9 +70,18 @@ function renderDom(frame: FrameNode, nodeId: string, dom: BundleDom): void {
       t.fontSize = Math.max(el.fontSize, 1);
       t.fills = [solidPaint(el.color)];
       t.textAlignHorizontal = el.align === 'center' ? 'CENTER' : el.align === 'right' ? 'RIGHT' : 'LEFT';
-      t.textAutoResize = 'NONE';
-      t.x = el.x; t.y = el.y;
-      t.resize(Math.max(el.w, 1), Math.max(el.h, 1));
+      t.x = el.x;
+      if (el.wrap) {
+        // browser wrapped this text: keep the box width, let height grow
+        t.textAutoResize = 'HEIGHT';
+        t.y = el.y;
+        t.resize(Math.max(el.w, 1), Math.max(el.h, 1));
+      } else {
+        // single line: never re-wrap (Inter is often wider than the source
+        // font); center vertically inside the original box
+        t.textAutoResize = 'WIDTH_AND_HEIGHT';
+        t.y = el.y + Math.max(0, (el.h - t.height) / 2);
+      }
       frame.appendChild(t);
     } else {
       const r = figma.createRectangle();

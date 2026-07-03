@@ -5,7 +5,7 @@ export type DomElement =
       bg?: RGBA; borderColor?: RGBA; borderWidth?: number; radius?: number }
   | { kind: 'text'; x: number; y: number; w: number; h: number;
       text: string; fontSize: number; fontWeight: number;
-      color: RGBA; align: 'left' | 'center' | 'right' }
+      color: RGBA; align: 'left' | 'center' | 'right'; wrap?: boolean }
   | { kind: 'image'; x: number; y: number; w: number; h: number;
       imageId: string; radius?: number };
 
