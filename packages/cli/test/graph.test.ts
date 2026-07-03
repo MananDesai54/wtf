@@ -51,4 +51,14 @@ describe('SessionGraph', () => {
     expect(d.nodes[0].note).toBe('entry page');
     expect(d.nodes[0].shotFile).toBe('shots/0001.png');
   });
+
+  it('creates dom dir and records domFile via setDom', () => {
+    const a = g.ensureNode('https://a.com/', 'Home', vp, 1);
+    expect(existsSync(join(dir, 'dom'))).toBe(true);
+    expect(a.node.domFile).toBeNull();
+    g.setDom(a.node.id, 'dom/0001.json');
+    expect(g.data.nodes[0].domFile).toBe('dom/0001.json');
+    const saved = JSON.parse(readFileSync(join(dir, 'graph.json'), 'utf8'));
+    expect(saved.nodes[0].domFile).toBe('dom/0001.json');
+  });
 });
