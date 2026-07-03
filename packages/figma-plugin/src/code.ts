@@ -1,6 +1,7 @@
 import { validateBundle, type Bundle, type BundleDom } from './validate.js';
 import { computeLayout, type Size } from './layout.js';
 import { fontStyleForWeight, solidPaint } from './dom-render.js';
+import { computeArrowPath, type Point } from './arrows.js';
 
 figma.showUI(__html__, { width: 340, height: 220 });
 
@@ -35,18 +36,34 @@ figma.ui.onmessage = async (msg: { type: string; json?: string; nodeId?: string;
   }
 };
 
-function makeArrow(from: { x: number; y: number }, to: { x: number; y: number }): LineNode {
-  const line = figma.createLine();
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  line.resize(Math.max(Math.hypot(dx, dy), 1), 0);
-  line.x = from.x;
-  line.y = from.y;
-  line.rotation = (-Math.atan2(dy, dx) * 180) / Math.PI;
-  line.strokes = [{ type: 'SOLID', color: { r: 0.05, g: 0.45, b: 1 } }];
-  line.strokeWeight = 2;
-  line.strokeCap = 'ARROW_LINES';
-  return line;
+const ARROW_COLOR = { r: 0.05, g: 0.45, b: 1 };
+
+// Elbow connector: polyline vector along the routed points plus a small
+// triangle arrowhead at the destination (final approach is always
+// horizontal left→right, so the head always points right).
+function makeArrow(points: Point[]): SceneNode[] {
+  const minX = Math.min(...points.map((p) => p.x));
+  const minY = Math.min(...points.map((p) => p.y));
+  const vector = figma.createVector();
+  vector.x = minX;
+  vector.y = minY;
+  const data = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x - minX} ${p.y - minY}`)
+    .join(' ');
+  vector.vectorPaths = [{ windingRule: 'NONE', data }];
+  vector.strokes = [{ type: 'SOLID', color: ARROW_COLOR }];
+  vector.strokeWeight = 2;
+  vector.fills = [];
+
+  const end = points[points.length - 1];
+  const head = figma.createPolygon();
+  head.pointCount = 3;
+  head.resize(10, 10);
+  head.rotation = -90; // default points up; point right (tip lands on `end`)
+  head.x = end.x;
+  head.y = end.y - 5;
+  head.fills = [{ type: 'SOLID', color: ARROW_COLOR }];
+  return [vector, head];
 }
 
 function renderDom(frame: FrameNode, nodeId: string, dom: BundleDom): void {
@@ -83,7 +100,28 @@ function renderDom(frame: FrameNode, nodeId: string, dom: BundleDom): void {
         t.y = el.y + Math.max(0, (el.h - t.height) / 2);
       }
       frame.appendChild(t);
+    } else if (el.kind === 'svg') {
+      const markup = dom.svgs?.[el.svgId];
+      const node = markup ? trySvg(markup) : null;
+      if (node) {
+        node.x = el.x; node.y = el.y;
+        node.resize(Math.max(el.w, 1), Math.max(el.h, 1));
+        frame.appendChild(node);
+      } else {
+        frame.appendChild(placeholderRect(el.x, el.y, el.w, el.h));
+      }
     } else {
+      const markup = dom.svgs?.[el.imageId];
+      if (markup) {
+        // svg-sourced <img>: render as real vectors
+        const node = trySvg(markup);
+        if (node) {
+          node.x = el.x; node.y = el.y;
+          node.resize(Math.max(el.w, 1), Math.max(el.h, 1));
+          frame.appendChild(node);
+          continue;
+        }
+      }
       const r = figma.createRectangle();
       r.x = el.x; r.y = el.y;
       r.resize(Math.max(el.w, 1), Math.max(el.h, 1));
@@ -100,6 +138,22 @@ function renderDom(frame: FrameNode, nodeId: string, dom: BundleDom): void {
       frame.appendChild(r);
     }
   }
+}
+
+function trySvg(markup: string): FrameNode | null {
+  try {
+    return figma.createNodeFromSvg(markup);
+  } catch {
+    return null;
+  }
+}
+
+function placeholderRect(x: number, y: number, w: number, h: number): RectangleNode {
+  const r = figma.createRectangle();
+  r.x = x; r.y = y;
+  r.resize(Math.max(w, 1), Math.max(h, 1));
+  r.fills = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+  return r;
 }
 
 async function build(bundle: Bundle, warnings: string[]): Promise<void> {
@@ -199,17 +253,26 @@ async function build(bundle: Bundle, warnings: string[]): Promise<void> {
       }]);
 
       const start = { x: src.x + hs.x + hw, y: src.y + hs.y + hh / 2 };
+      const dstSize = sizes.get(e.to)!;
       const end = { x: dst.x, y: dst.y + 40 };
-      const arrow = makeArrow(start, end);
-      arrow.name = e.label ? `flow: ${e.label}` : 'flow';
-      created.push(arrow);
+      const route = computeArrowPath(
+        start, end,
+        { x: src.x, y: src.y, width: s2.width, height: s2.height },
+        { x: dst.x, y: dst.y, width: dstSize.width, height: dstSize.height },
+      );
+      const arrowParts = makeArrow(route);
+      for (const part of arrowParts) {
+        part.name = e.label ? `flow: ${e.label}` : 'flow';
+        created.push(part);
+      }
 
       if (e.label) {
         const label = figma.createText();
         label.characters = e.label;
         label.fontSize = 12;
-        label.x = (start.x + end.x) / 2 - 40;
-        label.y = (start.y + end.y) / 2 - 20;
+        // sit on the first horizontal segment, just past the hotspot
+        label.x = route[0].x + 8;
+        label.y = route[0].y - 18;
         created.push(label);
       }
     }

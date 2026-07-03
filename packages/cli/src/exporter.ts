@@ -55,6 +55,7 @@ export async function exportSession(sessionDir: string, outFile: string): Promis
       width: number; height: number; truncated?: boolean;
       elements: StoredDomCapture['elements'];
       images: StoredDomCapture['imageData'];
+      svgs: StoredDomCapture['svgs'];
     } | null = null;
     if (n.domFile) {
       try {
@@ -65,6 +66,7 @@ export async function exportSession(sessionDir: string, outFile: string): Promis
           ...(raw.truncated ? { truncated: true } : {}),
           elements: raw.elements,
           images: raw.imageData ?? {},
+          svgs: raw.svgs ?? {},
         };
       } catch (err) {
         throw new Error(`failed to read dom capture for node ${n.id} (${n.domFile}): ${String(err)}`, { cause: err });

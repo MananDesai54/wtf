@@ -53,8 +53,13 @@ describe('SERIALIZE_SCRIPT', () => {
       expect(cap.images[images[0].imageId]).toMatch(/^data:image\/png/);
     }
 
-    // svg becomes a placeholder rect (no crash, no descent)
-    expect(cap.elements.some((e) => e.kind === 'rect' && e.w === 40 && e.h === 40)).toBe(true);
+    // inline svg captured as markup, not descended into
+    const svgs = cap.elements.filter((e) => e.kind === 'svg');
+    expect(svgs).toHaveLength(1);
+    if (svgs[0].kind === 'svg') {
+      expect(svgs[0].w).toBe(40);
+      expect(cap.svgs[svgs[0].svgId]).toContain('<circle');
+    }
 
     // single-line text carries no wrap flag; multi-line text is marked wrap
     if (heading?.kind === 'text') expect(heading.wrap).toBeUndefined();

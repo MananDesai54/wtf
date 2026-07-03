@@ -165,12 +165,20 @@ export class Recorder {
       const cap = (await page.evaluate(SERIALIZE_SCRIPT)) as DomCapture;
       if (cap.truncated) console.warn(`wtf: dom capture truncated at element cap for ${nodeUrl}`);
       const imageData: StoredDomCapture['imageData'] = {};
+      const svgs = { ...cap.svgs };
       for (const [id, src] of Object.entries(cap.images)) {
         const fetched = await this.fetchImage(src);
-        if (fetched) imageData[id] = fetched;
-        else console.warn(`wtf: image fetch failed: ${src.slice(0, 100)}`);
+        if (!fetched) {
+          console.warn(`wtf: image fetch failed: ${src.slice(0, 100)}`);
+        } else if (fetched.mime === 'image/svg+xml') {
+          // Figma can't createImage from SVG bytes — keep it as markup so
+          // the plugin renders it as vectors instead
+          svgs[id] = Buffer.from(fetched.base64, 'base64').toString('utf8');
+        } else {
+          imageData[id] = fetched;
+        }
       }
-      const stored: StoredDomCapture = { ...cap, imageData };
+      const stored: StoredDomCapture = { ...cap, svgs, imageData };
       const domFile = `dom/${String(++this.domSeq).padStart(4, '0')}.json`;
       writeFileSync(join(this.opts.out, domFile), JSON.stringify(stored));
       this.graph.setDom(nodeId, domFile);

@@ -7,11 +7,13 @@ export type DomElement =
       text: string; fontSize: number; fontWeight: number;
       color: RGBA; align: 'left' | 'center' | 'right'; wrap?: boolean }
   | { kind: 'image'; x: number; y: number; w: number; h: number;
-      imageId: string; radius?: number };
+      imageId: string; radius?: number }
+  | { kind: 'svg'; x: number; y: number; w: number; h: number; svgId: string };
 
 export interface DomCapture {
   width: number; height: number; truncated?: boolean;
   elements: DomElement[]; images: Record<string, string>;
+  svgs: Record<string, string>;
 }
 
 export interface StoredDomCapture extends DomCapture {

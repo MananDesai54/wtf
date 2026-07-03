@@ -3,10 +3,13 @@
 // capture-script.ts so it survives bundling untouched.
 export const SERIALIZE_SCRIPT = `(() => {
   const MAX_ELEMENTS = 5000;
+  const MAX_SVG_CHARS = 100000;
   const elements = [];
   const images = {};
+  const svgs = {};
   const urlToId = new Map();
   let imageSeq = 0;
+  let svgSeq = 0;
   let truncated = false;
 
   const parseColor = (str) => {
@@ -42,7 +45,18 @@ export const SERIALIZE_SCRIPT = `(() => {
     const rect = pageRect(el);
     if (rect.w <= 0 || rect.h <= 0) return;
 
-    if (tag === 'svg' || tag === 'canvas' || tag === 'video') {
+    if (tag === 'svg') {
+      const markup = el.outerHTML;
+      if (markup && markup.length <= MAX_SVG_CHARS) {
+        const id = 'svg' + (++svgSeq);
+        svgs[id] = markup;
+        elements.push({ kind: 'svg', x: rect.x, y: rect.y, w: rect.w, h: rect.h, svgId: id });
+      } else {
+        elements.push({ kind: 'rect', x: rect.x, y: rect.y, w: rect.w, h: rect.h, bg: { r: 0.9, g: 0.9, b: 0.9, a: 1 } });
+      }
+      return; // do not descend
+    }
+    if (tag === 'canvas' || tag === 'video') {
       elements.push({ kind: 'rect', x: rect.x, y: rect.y, w: rect.w, h: rect.h, bg: { r: 0.9, g: 0.9, b: 0.9, a: 1 } });
       return; // placeholder; do not descend
     }
@@ -102,6 +116,7 @@ export const SERIALIZE_SCRIPT = `(() => {
 
   const doc = document.documentElement;
   const result = {
+    svgs: svgs,
     width: Math.max(doc.scrollWidth, doc.clientWidth),
     height: Math.max(doc.scrollHeight, doc.clientHeight),
     elements: elements,
