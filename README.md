@@ -54,6 +54,6 @@ you clicked, arrows between pages, notes, and working prototype wiring.
 ## Limits (v1)
 
 - Clicks and navigations only (no hover/scroll/input capture)
-- First tab only; popups are ignored
+- New tabs/popups join the recording; capture works in whichever tab you click
 - Same URL = same page unless you use `new`
 - Screenshots over 4096px are downscaled (Figma limit)

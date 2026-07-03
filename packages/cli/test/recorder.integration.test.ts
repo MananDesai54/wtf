@@ -71,6 +71,42 @@ describe('Recorder', () => {
     expect(existsSync(join(out, 'events.jsonl'))).toBe(true);
   }, 60_000);
 
+  it('captures pages opened in new tabs, with the opening click as edge', async () => {
+    const out3 = mkdtempSync(join(tmpdir(), 'wtf-it3-'));
+    const rec = new Recorder({
+      url: baseUrl,
+      out: out3,
+      viewport: { width: 800, height: 600 },
+      headless: true,
+    });
+    await rec.start();
+    const page = rec.page;
+
+    await page.waitForSelector('#__wtf_capture_btn');
+    await page.click('#__wtf_capture_btn');       // capture home -> p1
+    await page.waitForTimeout(500);
+
+    const [popup] = await Promise.all([
+      page.context().waitForEvent('page'),
+      page.click('#blank'),                        // target=_blank -> new tab
+    ]);
+    await popup.waitForSelector('#__wtf_capture_btn');
+    await popup.click('#__wtf_capture_btn');       // capture in the NEW tab -> p2
+    await popup.waitForTimeout(500);
+
+    await rec.stop();
+
+    const graph: GraphData = JSON.parse(readFileSync(join(out3, 'graph.json'), 'utf8'));
+    expect(graph.nodes).toHaveLength(2);
+    expect(graph.nodes.map((n) => new URL(n.url).pathname)).toEqual(['/', '/two.html']);
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.edges[0]).toMatchObject({ from: 'p1', to: 'p2', label: 'Open Two New Tab' });
+    for (const n of graph.nodes) {
+      expect(n.shotFile).not.toBeNull();
+      expect(existsSync(join(out3, n.shotFile!))).toBe(true);
+    }
+  }, 60_000);
+
   it('does not record panel clicks as page clicks and restores panel after screenshot', async () => {
     const out2 = mkdtempSync(join(tmpdir(), 'wtf-it2-'));
     const rec = new Recorder({
