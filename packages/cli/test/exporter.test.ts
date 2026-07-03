@@ -1,0 +1,60 @@
+import { describe, it, expect } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import sharp from 'sharp';
+import { scaleFactor, scaleBBox, exportSession, MAX_DIM } from '../src/exporter.js';
+import type { GraphData } from '../src/graph.js';
+
+describe('scaleFactor', () => {
+  it('is 1 when within limits', () => {
+    expect(scaleFactor(1440, 4096)).toBe(1);
+  });
+  it('scales the larger dimension down to MAX_DIM', () => {
+    expect(scaleFactor(1440, 8192)).toBe(0.5);
+  });
+});
+
+describe('scaleBBox', () => {
+  it('scales and rounds all fields', () => {
+    expect(scaleBBox({ x: 100, y: 201, w: 50, h: 33 }, 0.5)).toEqual({ x: 50, y: 101, w: 25, h: 17 });
+  });
+});
+
+describe('exportSession', () => {
+  it('bundles nodes with base64 images, downscaling oversized shots', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'flowrec-exp-'));
+    mkdirSync(join(dir, 'shots'));
+    // 1000x100 (fits) and 8192x64 (needs 0.5x)
+    await sharp({ create: { width: 1000, height: 100, channels: 3, background: 'red' } })
+      .png().toFile(join(dir, 'shots', '0001.png'));
+    await sharp({ create: { width: 8192, height: 64, channels: 3, background: 'blue' } })
+      .png().toFile(join(dir, 'shots', '0002.png'));
+
+    const graph: GraphData = {
+      startUrl: 'https://a.com/',
+      recordedAt: '2026-07-03T00:00:00Z',
+      nodes: [
+        { id: 'p1', url: 'https://a.com/', title: 'Home', shotFile: 'shots/0001.png', viewport: { width: 1000, height: 100 }, timestamp: 1 },
+        { id: 'p2', url: 'https://a.com/big', title: 'Big', shotFile: 'shots/0002.png', viewport: { width: 8192, height: 64 }, note: 'wide page', timestamp: 2 },
+      ],
+      edges: [
+        { from: 'p2', to: 'p1', label: 'Back', bbox: { x: 4000, y: 10, w: 200, h: 20 }, timestamp: 3 },
+      ],
+    };
+    writeFileSync(join(dir, 'graph.json'), JSON.stringify(graph));
+
+    const out = join(dir, 'figma-import.json');
+    await exportSession(dir, out);
+    const bundle = JSON.parse(readFileSync(out, 'utf8'));
+
+    expect(bundle.version).toBe(1);
+    expect(bundle.nodes).toHaveLength(2);
+    expect(bundle.nodes[0].image.width).toBe(1000);
+    expect(bundle.nodes[1].image.width).toBe(MAX_DIM);
+    expect(bundle.nodes[1].note).toBe('wide page');
+    expect(bundle.nodes[1].image.base64.length).toBeGreaterThan(100);
+    // bbox on edge from p2 scaled by 0.5
+    expect(bundle.edges[0].bbox).toEqual({ x: 2000, y: 5, w: 100, h: 10 });
+  });
+});
